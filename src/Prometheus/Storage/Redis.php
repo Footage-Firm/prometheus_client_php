@@ -10,32 +10,16 @@ use Prometheus\Exception\StorageException;
 use Prometheus\Gauge;
 use Prometheus\Histogram;
 use Prometheus\MetricFamilySamples;
+use Illuminate\Support\Facades\Redis;
 
 class Redis implements Adapter
 {
     const PROMETHEUS_METRIC_KEYS_SUFFIX = '_METRIC_KEYS';
 
     /**
-     * @var mixed[]
-     */
-    private static $defaultOptions = [
-        'host' => '127.0.0.1',
-        'port' => 6379,
-        'timeout' => 0.1,
-        'read_timeout' => '10',
-        'persistent_connections' => false,
-        'password' => null,
-    ];
-
-    /**
      * @var string
      */
     private static $prefix = 'PROMETHEUS_';
-
-    /**
-     * @var mixed[]
-     */
-    private $options = [];
 
     /**
      * @var \Redis
@@ -47,40 +31,9 @@ class Redis implements Adapter
      */
     private $connectionInitialized = false;
 
-    /**
-     * Redis constructor.
-     * @param mixed[] $options
-     */
-    public function __construct(array $options = [])
+    public function __construct()
     {
-        $this->options = array_merge(self::$defaultOptions, $options);
         $this->redis = new \Redis();
-    }
-
-    /**
-     * @param \Redis $redis
-     * @return self
-     * @throws StorageException
-     */
-    public static function fromExistingConnection(\Redis $redis): self
-    {
-        if ($redis->isConnected() === false) {
-            throw new StorageException('Connection to Redis server not established');
-        }
-
-        $self = new self();
-        $self->connectionInitialized = true;
-        $self->redis = $redis;
-
-        return $self;
-    }
-
-    /**
-     * @param mixed[] $options
-     */
-    public static function setDefaultOptions(array $options): void
-    {
-        self::$defaultOptions = array_merge(self::$defaultOptions, $options);
     }
 
     /**
@@ -92,21 +45,11 @@ class Redis implements Adapter
     }
 
     /**
-     * @deprecated use replacement method wipeStorage from Adapter interface
-     * @throws StorageException
-     */
-    public function flushRedis(): void
-    {
-        $this->wipeStorage();
-    }
-
-    /**
      * @inheritDoc
      */
     public function wipeStorage(): void
     {
-        $this->ensureOpenConnection();
-
+    
         $searchPattern = "";
 
         $globalPrefix = $this->redis->getOption(\Redis::OPT_PREFIX);
@@ -118,8 +61,8 @@ class Redis implements Adapter
         $searchPattern .= self::$prefix;
         $searchPattern .= '*';
 
-        $this->redis->eval(
-            <<<LUA
+        $this->redis::eval(
+            <<<'LUA'
 local cursor = "0"
 repeat 
     local results = redis.call('SCAN', cursor, 'MATCH', ARGV[1])
@@ -129,9 +72,8 @@ repeat
     end
 until cursor == "0"
 LUA
-            ,
-            [$searchPattern],
-            0
+            ,0,
+            $searchPattern
         );
     }
 
@@ -141,7 +83,7 @@ LUA
      */
     public function collect(): array
     {
-        $this->ensureOpenConnection();
+        
         $metrics = $this->collectHistograms();
         $metrics = array_merge($metrics, $this->collectGauges());
         $metrics = array_merge($metrics, $this->collectCounters());
@@ -153,51 +95,6 @@ LUA
         );
     }
 
-    /**
-     * @throws StorageException
-     */
-    private function ensureOpenConnection(): void
-    {
-        if ($this->connectionInitialized === true) {
-            return;
-        }
-
-        $this->connectToServer();
-
-        if ($this->options['password'] !== null) {
-            $this->redis->auth($this->options['password']);
-        }
-
-        if (isset($this->options['database'])) {
-            $this->redis->select($this->options['database']);
-        }
-
-        $this->redis->setOption(\Redis::OPT_READ_TIMEOUT, $this->options['read_timeout']);
-    }
-
-    /**
-     * @throws StorageException
-     */
-    private function connectToServer(): void
-    {
-        try {
-            $connection_successful = false;
-            if ($this->options['persistent_connections'] !== false) {
-                $connection_successful = $this->redis->pconnect(
-                    $this->options['host'],
-                    (int) $this->options['port'],
-                    (float) $this->options['timeout']
-                );
-            } else {
-                $connection_successful = $this->redis->connect($this->options['host'], (int) $this->options['port'], (float) $this->options['timeout']);
-            }
-            if (!$connection_successful) {
-                throw new StorageException("Can't connect to Redis server", 0);
-            }
-        } catch (\RedisException $e) {
-            throw new StorageException("Can't connect to Redis server", 0, $e);
-        }
-    }
 
     /**
      * @param mixed[] $data
@@ -205,7 +102,7 @@ LUA
      */
     public function updateHistogram(array $data): void
     {
-        $this->ensureOpenConnection();
+        
         $bucketToIncrease = '+Inf';
         foreach ($data['buckets'] as $bucket) {
             if ($data['value'] <= $bucket) {
@@ -216,8 +113,8 @@ LUA
         $metaData = $data;
         unset($metaData['value'], $metaData['labelValues']);
 
-        $this->redis->eval(
-            <<<LUA
+        $this->redis::eval(
+            <<<'LUA'
 local result = redis.call('hIncrByFloat', KEYS[1], ARGV[1], ARGV[3])
 redis.call('hIncrBy', KEYS[1], ARGV[2], 1)
 if tonumber(result) >= tonumber(ARGV[3]) then
@@ -226,16 +123,14 @@ if tonumber(result) >= tonumber(ARGV[3]) then
 end
 return result
 LUA
-            ,
-            [
+            ,2
+            
                 $this->toMetricKey($data),
                 self::$prefix . Histogram::TYPE . self::PROMETHEUS_METRIC_KEYS_SUFFIX,
                 json_encode(['b' => 'sum', 'labelValues' => $data['labelValues']]),
                 json_encode(['b' => $bucketToIncrease, 'labelValues' => $data['labelValues']]),
                 $data['value'],
                 json_encode($metaData),
-            ],
-            2
         );
     }
 
@@ -245,11 +140,11 @@ LUA
      */
     public function updateGauge(array $data): void
     {
-        $this->ensureOpenConnection();
+        
         $metaData = $data;
         unset($metaData['value'], $metaData['labelValues'], $metaData['command']);
-        $this->redis->eval(
-            <<<LUA
+        $this->redis::eval(
+            <<<'LUA'
 local result = redis.call(ARGV[1], KEYS[1], ARGV[2], ARGV[3])
 
 if ARGV[1] == 'hSet' then
@@ -264,16 +159,15 @@ else
     end
 end
 LUA
-            ,
-            [
+            ,2
+            
                 $this->toMetricKey($data),
                 self::$prefix . Gauge::TYPE . self::PROMETHEUS_METRIC_KEYS_SUFFIX,
                 $this->getRedisCommand($data['command']),
                 json_encode($data['labelValues']),
                 $data['value'],
                 json_encode($metaData),
-            ],
-            2
+            
         );
     }
 
@@ -283,29 +177,18 @@ LUA
      */
     public function updateCounter(array $data): void
     {
-        $this->ensureOpenConnection();
+        
         $metaData = $data;
         unset($metaData['value'], $metaData['labelValues'], $metaData['command']);
-        $this->redis->eval(
-            <<<LUA
-local result = redis.call(ARGV[1], KEYS[1], ARGV[3], ARGV[2])
-local added = redis.call('sAdd', KEYS[2], KEYS[1])
-if added == 1 then
-    redis.call('hMSet', KEYS[1], '__meta', ARGV[4])
-end
-return result
-LUA
-            ,
-            [
-                $this->toMetricKey($data),
-                self::$prefix . Counter::TYPE . self::PROMETHEUS_METRIC_KEYS_SUFFIX,
-                $this->getRedisCommand($data['command']),
-                $data['value'],
-                json_encode($data['labelValues']),
-                json_encode($metaData),
-            ],
-            2
-        );
+        $this->redis::eval( <<<'LUA'
+    local counter = redis.call("incr", KEYS[1])
+
+    if counter > 5 then
+        redis.call("incr", KEYS[2])
+    end
+
+    return counter
+LUA, 2, 'first-counter', 'second-counter');
     }
 
     /**
@@ -313,11 +196,11 @@ LUA
      */
     private function collectHistograms(): array
     {
-        $keys = $this->redis->sMembers(self::$prefix . Histogram::TYPE . self::PROMETHEUS_METRIC_KEYS_SUFFIX);
+        $keys = $this->redis::smembers(self::$prefix . Histogram::TYPE . self::PROMETHEUS_METRIC_KEYS_SUFFIX);
         sort($keys);
         $histograms = [];
         foreach ($keys as $key) {
-            $raw = $this->redis->hGetAll(str_replace($this->redis->_prefix(''), '', $key));
+            $raw = $this->redis::hgetall($key);
             $histogram = json_decode($raw['__meta'], true);
             unset($raw['__meta']);
             $histogram['samples'] = [];
@@ -390,11 +273,11 @@ LUA
      */
     private function collectGauges(): array
     {
-        $keys = $this->redis->sMembers(self::$prefix . Gauge::TYPE . self::PROMETHEUS_METRIC_KEYS_SUFFIX);
+        $keys = $this->redis::smembers(self::$prefix . Gauge::TYPE . self::PROMETHEUS_METRIC_KEYS_SUFFIX);
         sort($keys);
         $gauges = [];
         foreach ($keys as $key) {
-            $raw = $this->redis->hGetAll(str_replace($this->redis->_prefix(''), '', $key));
+            $raw = $this->redis::hgetall( $key);
             $gauge = json_decode($raw['__meta'], true);
             unset($raw['__meta']);
             $gauge['samples'] = [];
@@ -419,11 +302,11 @@ LUA
      */
     private function collectCounters(): array
     {
-        $keys = $this->redis->sMembers(self::$prefix . Counter::TYPE . self::PROMETHEUS_METRIC_KEYS_SUFFIX);
+        $keys = $this->redis::smembers(self::$prefix . Counter::TYPE . self::PROMETHEUS_METRIC_KEYS_SUFFIX);
         sort($keys);
         $counters = [];
         foreach ($keys as $key) {
-            $raw = $this->redis->hGetAll(str_replace($this->redis->_prefix(''), '', $key));
+            $raw = $this->redis::hgetall($key);
             $counter = json_decode($raw['__meta'], true);
             unset($raw['__meta']);
             $counter['samples'] = [];
@@ -451,11 +334,11 @@ LUA
     {
         switch ($cmd) {
             case Adapter::COMMAND_INCREMENT_INTEGER:
-                return 'hIncrBy';
+                return 'HINCYBY';
             case Adapter::COMMAND_INCREMENT_FLOAT:
-                return 'hIncrByFloat';
+                return 'HINCRBYFLOAT';
             case Adapter::COMMAND_SET:
-                return 'hSet';
+                return 'HSET';
             default:
                 throw new InvalidArgumentException("Unknown command");
         }
