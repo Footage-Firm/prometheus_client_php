@@ -68,6 +68,7 @@ LUA
         $metrics = $this->collectHistograms();
         $metrics = array_merge($metrics, $this->collectGauges());
         $metrics = array_merge($metrics, $this->collectCounters());
+        $this->wipeStorage();
         return array_map(
             function (array $metric): MetricFamilySamples {
                 return new MetricFamilySamples($metric);
