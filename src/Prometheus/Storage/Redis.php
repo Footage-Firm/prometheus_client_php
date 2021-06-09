@@ -39,13 +39,6 @@ class Redis implements Adapter
     {
     
         $searchPattern = "";
-
-        $globalPrefix = $this->redis->getOption(\Redis::OPT_PREFIX);
-        // @phpstan-ignore-next-line false positive, phpstan thinks getOptions returns int
-        if (is_string($globalPrefix)) {
-            $searchPattern .= $globalPrefix;
-        }
-
         $searchPattern .= self::$prefix;
         $searchPattern .= '*';
 
@@ -111,7 +104,7 @@ if tonumber(result) >= tonumber(ARGV[3]) then
 end
 return result
 LUA
-            ,2
+            ,2,
             
                 $this->toMetricKey($data),
                 self::$prefix . Histogram::TYPE . self::PROMETHEUS_METRIC_KEYS_SUFFIX,
@@ -147,7 +140,7 @@ else
     end
 end
 LUA
-            ,2
+            ,2,
             
                 $this->toMetricKey($data),
                 self::$prefix . Gauge::TYPE . self::PROMETHEUS_METRIC_KEYS_SUFFIX,
