@@ -10,7 +10,6 @@ use Prometheus\Exception\StorageException;
 use Prometheus\Gauge;
 use Prometheus\Histogram;
 use Prometheus\MetricFamilySamples;
-use ;
 
 class Redis implements Adapter
 {
@@ -19,7 +18,7 @@ class Redis implements Adapter
     private static string $prefix = 'PROMETHEUS_';
 
     private \Illuminate\Support\Facades\Redis $redis;
-    
+
     public function __construct()
     {
         $this->redis = new \Redis();
