@@ -18,9 +18,9 @@ class RedisStorage implements Adapter
 
     private Redis $redis;
 
-    public function __construct(Redis $redis)
+    public function __construct()
     {
-        $this->redis = $redis;
+        $this->redis = new Redis();
     }
 
     /**
