@@ -42,11 +42,11 @@ class Redis implements Adapter
         $searchPattern .= self::$prefix;
         $searchPattern .= '*';
         $this->redis::eval(
-            <<<'LUA' 
-            return redis.call('del', unpack(redis.call('keys', ARGV[1]))) 
-            LUA,
-            0,
-            $searchPattern
+            <<<'LUA'
+return redis.call('del', unpack(redis.call('keys', ARGV[1])))
+LUA
+            ,0,
+            $searchPattern,
         );
     }
 
