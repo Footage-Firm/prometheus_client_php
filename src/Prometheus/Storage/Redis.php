@@ -41,26 +41,15 @@ class Redis implements Adapter
         $searchPattern = "";
         $searchPattern .= self::$prefix;
         $searchPattern .= '*';
-
         $this->redis::eval(
-            <<<'LUA'
-local cursor = "0"
-repeat 
-    local results = redis.call('SCAN', cursor, 'MATCH', ARGV[1])
-    cursor = results[1]
-    for _, key in ipairs(results[2]) do
-        redis.call('DEL', key)
-    end
-until cursor == "0"
-LUA
-            ,0,
+            <<<'LUA' return redis.call('del', unpack(redis.call('keys', ARGV[1]))) LUA,
+            0,
             $searchPattern
         );
     }
 
     /**
      * @return MetricFamilySamples[]
-     * @throws StorageException
      */
     public function collect(): array
     {
@@ -80,7 +69,6 @@ LUA
 
     /**
      * @param mixed[] $data
-     * @throws StorageException
      */
     public function updateHistogram(array $data): void
     {
@@ -118,7 +106,6 @@ LUA
 
     /**
      * @param mixed[] $data
-     * @throws StorageException
      */
     public function updateGauge(array $data): void
     {
@@ -155,7 +142,6 @@ LUA
 
     /**
      * @param mixed[] $data
-     * @throws StorageException
      */
     public function updateCounter(array $data): void
     {
