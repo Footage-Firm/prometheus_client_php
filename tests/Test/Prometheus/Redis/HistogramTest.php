@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Test\Prometheus\Redis;
 
-use Prometheus\Storage\Redis;
+use Prometheus\Storage\RedisStorage;
 use Test\Prometheus\AbstractHistogramTest;
 
 /**
@@ -15,7 +15,7 @@ class HistogramTest extends AbstractHistogramTest
 {
     public function configureAdapter(): void
     {
-        $this->adapter = new Redis(['host' => REDIS_HOST]);
+        $this->adapter = new RedisStorage(['host' => REDIS_HOST]);
         $this->adapter->wipeStorage();
     }
 }

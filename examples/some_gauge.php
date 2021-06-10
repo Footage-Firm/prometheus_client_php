@@ -3,7 +3,7 @@
 require __DIR__ . '/../vendor/autoload.php';
 
 use Prometheus\CollectorRegistry;
-use Prometheus\Storage\Redis;
+use Prometheus\Storage\RedisStorage;
 
 
 error_log('c=' . $_GET['c']);
@@ -11,8 +11,8 @@ error_log('c=' . $_GET['c']);
 $adapter = $_GET['adapter'];
 
 if ($adapter === 'redis') {
-    Redis::setDefaultOptions(['host' => $_SERVER['REDIS_HOST'] ?? '127.0.0.1']);
-    $adapter = new Prometheus\Storage\Redis();
+    RedisStorage::setDefaultOptions(['host' => $_SERVER['REDIS_HOST'] ?? '127.0.0.1']);
+    $adapter = new Prometheus\Storage\RedisStorage();
 } elseif ($adapter === 'apc') {
     $adapter = new Prometheus\Storage\APC();
 } elseif ($adapter === 'in-memory') {

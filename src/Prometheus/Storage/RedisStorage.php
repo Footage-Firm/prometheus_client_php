@@ -6,22 +6,21 @@ namespace Prometheus\Storage;
 
 use InvalidArgumentException;
 use Prometheus\Counter;
-use Prometheus\Exception\StorageException;
 use Prometheus\Gauge;
 use Prometheus\Histogram;
 use Prometheus\MetricFamilySamples;
-
-class Redis implements Adapter
+use Illuminate\Support\Facades\Redis;
+class RedisStorage implements Adapter
 {
     const PROMETHEUS_METRIC_KEYS_SUFFIX = '_METRIC_KEYS';
 
     private static string $prefix = 'PROMETHEUS_';
 
-    private \Illuminate\Support\Facades\Redis $redis;
+    private Redis $redis;
 
-    public function __construct()
+    public function __construct(Redis $redis)
     {
-        $this->redis = new \Redis();
+        $this->redis = $redis;
     }
 
     /**

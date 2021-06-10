@@ -31,7 +31,7 @@ class RedisTest extends TestCase
      */
     public function itShouldThrowAnExceptionOnConnectionFailure(): void
     {
-        $redis = new Redis(['host' => '/dev/null']);
+        $redis = new RedisStorage(['host' => '/dev/null']);
 
         $this->expectException(StorageException::class);
         $this->expectExceptionMessage("Can't connect to Redis server");
@@ -50,7 +50,7 @@ class RedisTest extends TestCase
         $this->expectException(StorageException::class);
         $this->expectExceptionMessage('Connection to Redis server not established');
 
-        Redis::fromExistingConnection($connection);
+        RedisStorage::fromExistingConnection($connection);
     }
 
     /**
@@ -60,7 +60,7 @@ class RedisTest extends TestCase
     {
         $this->redisConnection->set('not a prometheus metric key', 'data');
 
-        $redis    = Redis::fromExistingConnection($this->redisConnection);
+        $redis    = RedisStorage::fromExistingConnection($this->redisConnection);
         $registry = new CollectorRegistry($redis);
 
         // ensure flush is working correctly on large number of metrics

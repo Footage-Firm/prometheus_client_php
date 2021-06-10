@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Test\Prometheus\Redis;
 
-use Prometheus\Storage\Redis;
+use Prometheus\Storage\RedisStorage;
 use Test\Prometheus\AbstractHistogramTest;
 
 /**
@@ -20,7 +20,7 @@ class HistogramWithPrefixTest extends AbstractHistogramTest
 
         $connection->setOption(\Redis::OPT_PREFIX, 'prefix:');
 
-        $this->adapter = Redis::fromExistingConnection($connection);
+        $this->adapter = RedisStorage::fromExistingConnection($connection);
         $this->adapter->wipeStorage();
     }
 }
